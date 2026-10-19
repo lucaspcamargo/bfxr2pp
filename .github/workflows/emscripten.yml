@@ -2,9 +2,9 @@ name: Emscripten demo build & deploy
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "master" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "master" ]
   workflow_dispatch: {}
 
 # Sets permissions required to publish to GitHub Pages
