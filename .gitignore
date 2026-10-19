@@ -9,3 +9,5 @@ node_modules
 /desktop/build/
 /desktop/artifacts/
 /dist/
+build/
+imgui.ini
