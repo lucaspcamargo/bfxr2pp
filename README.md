@@ -1,6 +1,6 @@
 # bfxr2pp
 
-A clean, modern C++17 library port and rework of the [bfxr2](https://github.com/bfxr/bfxr2) sound effect synthesizer engine, designed for straightforward integration into custom game engines and audio toolchains.
+A clean, modern C++17 library port and rework of the [bfxr2](https://github.com/increpare/bfxr2) sound effect synthesizer engine, designed for straightforward integration into custom game engines and audio toolchains.
 
 ## Features
 
