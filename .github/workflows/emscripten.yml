@@ -28,8 +28,6 @@ jobs:
 
       - name: Setup Emscripten toolchain
         uses: emscripten-core/setup-emsdk@v16
-        with:
-          emsdk-version: latest
 
       - name: Configure CMake Preset
         run: cmake --preset Emscripten
