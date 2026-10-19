@@ -64,5 +64,5 @@ jobs:
     if: github.ref == 'main' && github.event_name == 'push'
     steps:
       - name: Deploy to GitHub Pages
-      - id: deployment
+        id: deployment
         uses: actions/deploy-pages@v4
