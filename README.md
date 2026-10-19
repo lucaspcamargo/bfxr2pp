@@ -173,6 +173,10 @@ Features:
 - **WAV Export**: Save generated sounds directly to 16-bit PCM WAV.
 - **HiDPI & System Fonts**: Crisp text rendering scaled to native window pixel density with automatic system font and dark/light theme detection.
 
+## Credits
+
+Essentially all credit goes to the upstream `bfxr2` project, and its contributors. I just adjusted the existing testing tool, already in C++, and adapted it for my needs, porting more JS synths along the way. This version is probably behind on features and since-added synths. Yet it simply fulfills my need for an easily integratable version for my engine.
+
 ## License
 
 Licensed under the BSD 3-Clause license, following the original bfxr2 project. See [LICENSE](LICENSE) for details.
