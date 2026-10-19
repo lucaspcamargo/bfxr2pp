@@ -269,6 +269,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   } else {
     ImGui::StyleColorsLight();
   }
+  ImGui::GetStyle().FrameRounding = 3.0f;
+  ImGui::GetStyle().GrabRounding  = 2.0f;
 
   std::string font_path = find_system_ui_font();
   float pixel_density = SDL_GetWindowPixelDensity(window);
