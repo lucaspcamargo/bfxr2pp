@@ -2,6 +2,8 @@
 
 A clean, modern C++17 library port and rework of the [bfxr2](https://github.com/increpare/bfxr2) sound effect synthesizer engine, designed for straightforward integration into custom game engines and audio toolchains.
 
+Being a C++ port does not preclude us from supporting the web, though! You can use the [GUI application](https://lucaspcamargo.github.io/bfxr2pp/) right from your web browser, and use it to generate WAV samples you can download, or just play around :)
+
 ## Features
 
 - **Self-contained DSP core**: Full sound generation pipeline ported from bfxr2 (pitch slides, envelopes, flanger, low/high-pass filters, bitcrush, harmonics, vibrato, etc.).
