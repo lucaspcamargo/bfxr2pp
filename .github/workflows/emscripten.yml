@@ -5,6 +5,7 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch: {}
 
 # Sets permissions required to publish to GitHub Pages
 permissions:
