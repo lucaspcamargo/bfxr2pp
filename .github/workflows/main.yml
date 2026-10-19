@@ -1,4 +1,4 @@
-name: Emscripten demo build
+name: Emscripten demo build & deploy
 
 on:
   push:
@@ -6,17 +6,63 @@ on:
   pull_request:
     branches: [ "main" ]
 
+# Sets permissions required to publish to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   build:
-    # Uses GitHub's default Linux-hosted runner environment
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Check out your repository code onto the runner
       - name: Checkout Repository
         uses: actions/checkout@v4
+
       - name: Setup Emscripten toolchain
         uses: emscripten-core/setup-emsdk@v16
-      - name: Main Build
+        with:
+          emsdk-version: latest
+
+      - name: Configure CMake Preset
+        run: cmake --preset Emscripten
+
+      - name: Build CMake Preset
+        run: cmake --build --preset Emscripten
+
+      - name: Prepare GitHub Pages Artifact
         run: |
-          emcmake -B ./build -S .
+          mkdir -p _pages
+          # Copy your compiled Emscripten output files 
+          # (adjust build/emscripten if your preset uses a different binaryDir)
+          cp build/emscripten/bfxr2pp_gui.* _pages/
+          
+          # GitHub Pages serves index.html by default. 
+          # If your file is bfxr2pp_gui.html, copy/rename it to index.html:
+          if [ -f _pages/bfxr2pp_gui.html ]; then
+            cp _pages/bfxr2pp_gui.html _pages/index.html
+          fi
+
+      - name: Upload artifact for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _pages
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.url }}
+    runs-on: ubuntu-latest
+    needs: build
+    # Only deploy automatically when pushing to the main branch
+    if: github.ref == 'main' && github.event_name == 'push'
+    steps:
+      - name: Deploy to GitHub Pages
+      - id: deployment
+        uses: actions/deploy-pages@v4
