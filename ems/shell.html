@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en-us">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{{ TITLE }}}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+    canvas#canvas {
+      display: block;
+      width: 100vw !important;
+      height: 100vh !important;
+    }
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: #111;
+      z-index: 10;
+      transition: opacity 0.35s ease;
+    }
+    #loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #loading-status {
+      color: #888;
+      font-family: monospace;
+      font-size: 13px;
+    }
+    #progress-track {
+      width: min(60vw, 360px);
+      height: 4px;
+      background: #2a2a2a;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    #progress-fill {
+      height: 100%;
+      width: 0%;
+      background: #ccc;
+      border-radius: 2px;
+      transition: width 0.15s ease;
+    }
+    @keyframes nb-progress-pulse {
+      0%   { margin-left: 0%;   width: 20%; }
+      50%  { margin-left: 40%;  width: 40%; }
+      100% { margin-left: 80%;  width: 20%; }
+    }
+    #progress-fill.indeterminate {
+      width: auto !important;
+      animation: nb-progress-pulse 1.4s ease-in-out infinite;
+    }
+    #fullscreen-btn {
+      position: fixed;
+      bottom: 14px;
+      right: 14px;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px; height: 32px;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 5px;
+      color: #ccc;
+      cursor: pointer;
+      font-size: 15px;
+      line-height: 1;
+      opacity: 0;
+      transition: opacity 0.2s, background 0.15s;
+    }
+    body:hover #fullscreen-btn,
+    #fullscreen-btn:focus-visible {
+      opacity: 1;
+    }
+    #fullscreen-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+    #fullscreen-btn.nb-hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+
+  <div id="loading-overlay">
+    <div id="loading-status">Loading&hellip;</div>
+    <div id="progress-track">
+      <div id="progress-fill"></div>
+    </div>
+  </div>
+
+  <button id="fullscreen-btn" title="Toggle fullscreen" aria-label="Toggle fullscreen">
+    &#x26F6;
+  </button>
+
+  <script>
+    (function () {
+
+      // TODO Have some mechanism for sngle-threaded fallback?
+      //      Something like the beow code.
+      //      We may need to change CI and CMake scripts to support this
+      //      and build two versions of the engine/app.
+      //if ("SharedArrayBuffer" in window) {
+      //  // use code optimized for SharedArrayBuffer
+      //} else {
+      //  // use fallback
+      //}
+
+      var overlay  = document.getElementById('loading-overlay');
+      var statusEl = document.getElementById('loading-status');
+      var fillEl   = document.getElementById('progress-fill');
+      var fsBtn    = document.getElementById('fullscreen-btn');
+
+      // Embedders (e.g. an iframe host page) can hide the fullscreen button by
+      // launching this page with ?nb_fullscreen_btn=0, or at any time by posting
+      // {nbFullscreenBtn: false} to this window (origin is not checked since the
+      // toggle carries no sensitive data).
+      function setFullscreenBtnVisible(visible) {
+        fsBtn.classList.toggle('nb-hidden', !visible);
+      }
+      if (/[?&]nb_fullscreen_btn=0\b/.test(window.location.search)) {
+        setFullscreenBtnVisible(false);
+      }
+      window.addEventListener('message', function (e) {
+        if (e.data && typeof e.data === 'object' && 'nbFullscreenBtn' in e.data) {
+          setFullscreenBtnVisible(!!e.data.nbFullscreenBtn);
+        }
+      });
+
+      fsBtn.addEventListener('click', function () {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen();
+        } else {
+          document.exitFullscreen();
+        }
+      });
+
+      document.addEventListener('fullscreenchange', function () {
+        fsBtn.textContent = document.fullscreenElement ? '\u22BF' : '\u26F6';
+      });
+
+      // Suppress browser defaults for all non-primary mouse buttons on the canvas:
+      // middle-click autoscroll (button 1), context menu (button 2, also covered by
+      // oncontextmenu for the keyboard Menu key), and browser back/forward (3/4).
+      document.getElementById('canvas').addEventListener('mousedown', function (e) {
+        if (e.button !== 0) e.preventDefault();
+      });
+
+      function hideOverlay() {
+        overlay.classList.add('hidden');
+        document.getElementById('canvas').focus();
+      }
+
+      // Embedders that know the uncompressed .wasm size up front (e.g. because they
+      // built it) can pass ?nb_wasm_size_hint=<bytes> so the progress bar reflects
+      // actual download progress instead of an indeterminate animation. This is
+      // necessary because CDNs commonly serve the file brotli/gzip-compressed
+      // without a Content-Length header (the compressed size isn't known ahead of
+      // time), so we can't infer the total from the response itself.
+      var wasmSizeHint = 0;
+      var sizeHintMatch = /[?&]nb_wasm_size_hint=(\d+)\b/.exec(window.location.search);
+      if (sizeHintMatch) wasmSizeHint = parseInt(sizeHintMatch[1], 10);
+
+      if (wasmSizeHint > 0) {
+        var nativeFetch = window.fetch;
+        window.fetch = function (input, init) {
+          var url = (typeof input === 'string') ? input : input.url;
+          if (!/\.wasm(\?|$)/.test(url)) return nativeFetch(input, init);
+          return nativeFetch(input, init).then(function (response) {
+            if (!response.body) return response;
+            var received = 0;
+            var reader = response.body.getReader();
+            var stream = new ReadableStream({
+              pull: function (controller) {
+                return reader.read().then(function (result) {
+                  if (result.done) { controller.close(); return; }
+                  received += result.value.byteLength;
+                  // clamp below 100% — compilation/instantiation still follows the download
+                  var pct = Math.min(99, Math.floor(received / wasmSizeHint * 100));
+                  fillEl.style.width = pct + '%';
+                  statusEl.textContent = 'Downloading… ' + pct + '%';
+                  controller.enqueue(result.value);
+                });
+              }
+            });
+            return new Response(stream, {
+              headers: response.headers,
+              status: response.status,
+              statusText: response.statusText
+            });
+          });
+        };
+      } else {
+        // no size hint — fall back to an indeterminate animation since setStatus
+        // will not provide (n/total) numbers for embedded/streamed files.
+        fillEl.classList.add('indeterminate');
+      }
+
+      window.Module = {
+        canvas: document.getElementById('canvas'),
+
+        setStatus: function (text) {
+          if (!text) { hideOverlay(); return; }
+          var m = text.match(/([^(]+)\((\d+(?:\.\d+)?)\/(\d+)\)/);
+          if (m) {
+            // deterministic progress available (e.g. preloaded files)
+            fillEl.classList.remove('indeterminate');
+            fillEl.style.width = (parseFloat(m[2]) / parseFloat(m[3]) * 100) + '%';
+            statusEl.textContent = m[1].trim();
+          } else {
+            statusEl.textContent = text;
+          }
+        },
+
+        monitorRunDependencies: function (left) {
+          //if (left === 0) { hideOverlay(); }
+        },
+
+        onRuntimeInitialized: function () {
+            //hideOverlay();
+        }
+      };
+
+      window.onerror = function (msg) {
+        statusEl.textContent = 'Error: ' + msg;
+        fillEl.style.background = '#c44';
+      };
+    })();
+  </script>
+  {{{ SCRIPT }}}
+</body>
+</html>

@@ -14,6 +14,12 @@ option(BFXR2_BUILD_EXAMPLES "Build example applications" OFF)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
+if(EMSCRIPTEN)
+  # for the web, build executables as html
+  set(CMAKE_EXECUTABLE_SUFFIX ".html")
+  set(CMAKE_EXECUTABLE_EXTENSION ".html")
+endif()
+
 # Core sources
 set(BFXR2_SRCS
   src/bfxr_dsp.cpp
@@ -70,16 +76,21 @@ endif()
 
 # Examples
 if(BFXR2_BUILD_EXAMPLES)
-  find_package(SDL3 CONFIG QUIET)
-  if(NOT SDL3_FOUND)
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
-    set(BFXR2_SDL3_TARGET PkgConfig::SDL3)
-  else()
-    set(BFXR2_SDL3_TARGET SDL3::SDL3)
+  if(NOT EMSCRIPTEN)
+    find_package(SDL3 CONFIG QUIET)
+    if(NOT SDL3_FOUND)
+      find_package(PkgConfig REQUIRED)
+      pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
+      set(BFXR2_SDL3_TARGET PkgConfig::SDL3)
+    else()
+      set(BFXR2_SDL3_TARGET SDL3::SDL3)
+    endif()
   endif()
 
   add_executable(bfxr2pp_sdl_play examples/sdl_playback/main.cpp)
+  if(EMSCRIPTEN)
+    set_target_properties(bfxr2pp_sdl_play PROPERTIES LINK_FLAGS "-s USE_SDL=3 --shell-file ${CMAKE_SOURCE_DIR}/ems/shell.html")
+  endif()
   target_link_libraries(bfxr2pp_sdl_play PRIVATE bfxr2 ${BFXR2_SDL3_TARGET})
 
   # Fetch Dear ImGui
@@ -107,6 +118,10 @@ if(BFXR2_BUILD_EXAMPLES)
 
   add_executable(bfxr2pp_gui examples/gui/main.cpp)
   target_link_libraries(bfxr2pp_gui PRIVATE bfxr2 imgui_sdl3 ${BFXR2_SDL3_TARGET})
+
+  if(EMSCRIPTEN)
+    set_target_properties(bfxr2pp_gui PROPERTIES LINK_FLAGS "-s USE_SDL=3 --shell-file ${CMAKE_SOURCE_DIR}/ems/shell.html")
+  endif()
 endif()
 
 # Installation & CMake Export

@@ -5,6 +5,8 @@
 #include "bfxr2/wav.h"
 
 #include <SDL3/SDL.h>
+#define SDL_MAIN_USE_CALLBACKS
+#include <SDL3/SDL_main.h>
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
@@ -157,6 +159,13 @@ struct AppState {
   std::chrono::steady_clock::time_point export_status_time;
 };
 
+struct FullAppData {
+  SDL_Window* window = nullptr;
+  SDL_Renderer* renderer = nullptr;
+  AppState app;
+  bool is_dark_theme = true;
+};
+
 void resynthesize(AppState& state) {
   bfxr::Mulberry32 rng(state.seed);
   bfxr::RenderResult res = bfxr::render_bfxr(state.params, rng);
@@ -196,10 +205,11 @@ void play_audio(AppState& state) {
 
 }  // namespace
 
-int main(int, char**) {
+
+SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
     std::cerr << "SDL_Init error: " << SDL_GetError() << "\n";
-    return 1;
+    return SDL_APP_FAILURE;
   }
 
   SDL_Window* window = SDL_CreateWindow(
@@ -210,7 +220,7 @@ int main(int, char**) {
   if (!window) {
     std::cerr << "SDL_CreateWindow error: " << SDL_GetError() << "\n";
     SDL_Quit();
-    return 1;
+    return SDL_APP_FAILURE;
   }
 
   SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);
@@ -218,7 +228,7 @@ int main(int, char**) {
     std::cerr << "SDL_CreateRenderer error: " << SDL_GetError() << "\n";
     SDL_DestroyWindow(window);
     SDL_Quit();
-    return 1;
+    return SDL_APP_FAILURE;
   }
 
   // Audio setup
@@ -235,11 +245,13 @@ int main(int, char**) {
       nullptr
   );
 
-  AppState app;
-  app.audio_stream = stream;
-  app.param_info = bfxr::make_param_info();
-  app.params = bfxr::default_params();
-  resynthesize(app);
+  auto* data = new FullAppData();
+  data->window = window;
+  data->renderer = renderer;
+  data->app.audio_stream = stream;
+  data->app.param_info = bfxr::make_param_info();
+  data->app.params = bfxr::default_params();
+  resynthesize(data->app);
 
   // Setup ImGui
   IMGUI_CHECKVERSION();
@@ -247,14 +259,13 @@ int main(int, char**) {
   ImGuiIO& io = ImGui::GetIO();
   (void)io;
 
-  bool is_dark_theme = detect_system_dark_theme();
-  if (is_dark_theme) {
+  data->is_dark_theme = detect_system_dark_theme();
+  if (data->is_dark_theme) {
     ImGui::StyleColorsDark();
   } else {
     ImGui::StyleColorsLight();
   }
 
-  // Try loading system UI TrueType font for crisp rendering
   std::string font_path = find_system_ui_font();
   float pixel_density = SDL_GetWindowPixelDensity(window);
   if (pixel_density <= 0.0f) pixel_density = 1.0f;
@@ -285,217 +296,223 @@ int main(int, char**) {
     io.FontGlobalScale = content_scale;
   }
 
-  bool running = true;
-  while (running) {
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-      ImGui_ImplSDL3_ProcessEvent(&event);
-      if (event.type == SDL_EVENT_QUIT) {
-        running = false;
-      }
-      if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
-          event.window.windowID == SDL_GetWindowID(window)) {
-        running = false;
-      }
-    }
+  *appstate = data;
+  return SDL_APP_CONTINUE;
+}
 
-    ImGui_ImplSDLRenderer3_NewFrame();
-    ImGui_ImplSDL3_NewFrame();
-    ImGui::NewFrame();
+SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
+  auto* data = static_cast<FullAppData*>(appstate);
+  ImGui_ImplSDL3_ProcessEvent(event);
+  if (event->type == SDL_EVENT_QUIT) {
+    return SDL_APP_SUCCESS;
+  }
+  if (event->type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
+      event->window.windowID == SDL_GetWindowID(data->window)) {
+    return SDL_APP_SUCCESS;
+  }
+  return SDL_APP_CONTINUE;
+}
 
-    // Main window spanning entire client area
-    int w = 0, h = 0;
-    SDL_GetWindowSize(window, &w, &h);
-    ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2(static_cast<float>(w), static_cast<float>(h)));
-    ImGuiWindowFlags win_flags = ImGuiWindowFlags_NoTitleBar |
-                                 ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_NoCollapse;
+SDL_AppResult SDL_AppIterate(void* appstate) {
+  auto* data = static_cast<FullAppData*>(appstate);
+  AppState& app = data->app;
+  SDL_Window* window = data->window;
+  SDL_Renderer* renderer = data->renderer;
 
-    ImGui::Begin("bfxr2pp Studio", nullptr, win_flags);
+  ImGui_ImplSDLRenderer3_NewFrame();
+  ImGui_ImplSDL3_NewFrame();
+  ImGui::NewFrame();
 
-    // Header controls
-    ImGui::Text("Presets & Generation:");
-    ImGui::SameLine();
-    if (ImGui::Button("PLAY SOUND (Space)")) {
-      play_audio(app);
-    }
-    if (ImGui::IsKeyPressed(ImGuiKey_Space)) {
-      play_audio(app);
-    }
+  int w = 0, h = 0;
+  SDL_GetWindowSize(window, &w, &h);
+  ImGui::SetNextWindowPos(ImVec2(0, 0));
+  ImGui::SetNextWindowSize(ImVec2(static_cast<float>(w), static_cast<float>(h)));
+  ImGuiWindowFlags win_flags = ImGuiWindowFlags_NoTitleBar |
+                               ImGuiWindowFlags_NoResize |
+                               ImGuiWindowFlags_NoMove |
+                               ImGuiWindowFlags_NoCollapse;
 
-    ImGui::Separator();
+  ImGui::Begin("bfxr2pp Studio", nullptr, win_flags);
 
-    // Presets bar
-    for (const auto& meta : bfxr::get_preset_list()) {
-      if (ImGui::Button(meta.short_name.c_str())) {
-        std::random_device rd;
-        app.seed = rd();
-        bfxr::Mulberry32 rng(app.seed);
-        if (meta.category == bfxr::PresetCategory::Mutate) {
-          app.params = bfxr::mutate_params(app.params, rng);
-        } else {
-          app.params = bfxr::generate_preset(meta.category, rng);
-        }
-        resynthesize(app);
-        play_audio(app);
-      }
-      if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("%s: %s (Generates new variation)", meta.name.c_str(), meta.description.c_str());
-      }
-      ImGui::SameLine();
-    }
+  ImGui::Text("Presets & Generation:");
+  ImGui::SameLine();
+  if (ImGui::Button("PLAY SOUND (Space)")) {
+    play_audio(app);
+  }
+  if (ImGui::IsKeyPressed(ImGuiKey_Space)) {
+    play_audio(app);
+  }
 
-    // New random seed button
-    if (ImGui::Button("New Seed")) {
+  ImGui::Separator();
+
+  for (const auto& meta : bfxr::get_preset_list()) {
+    if (ImGui::Button(meta.short_name.c_str())) {
       std::random_device rd;
       app.seed = rd();
+      bfxr::Mulberry32 rng(app.seed);
+      if (meta.category == bfxr::PresetCategory::Mutate) {
+        app.params = bfxr::mutate_params(app.params, rng);
+      } else {
+        app.params = bfxr::generate_preset(meta.category, rng);
+      }
       resynthesize(app);
       play_audio(app);
     }
-
-    ImGui::SameLine();
-    ImGui::Spacing();
-    ImGui::SameLine();
-
-    // WAV Export controls
-    ImGui::SetNextItemWidth(140.0f);
-    ImGui::InputText("##ExportFile", app.export_filename, sizeof(app.export_filename));
-    ImGui::SameLine();
-    if (ImGui::Button("Export WAV")) {
-      if (app.audio_buffer.empty()) {
-        app.export_status = "Error: empty buffer!";
-      } else {
-        std::string wav_data = bfxr::encode_wav16(
-            app.audio_buffer.data(),
-            app.audio_buffer.size(),
-            44100
-        );
-        if (bfxr::write_file(app.export_filename, wav_data)) {
-          app.export_status = std::string("Saved ") + app.export_filename;
-        } else {
-          app.export_status = "Error writing file!";
-        }
-      }
-      app.export_status_time = std::chrono::steady_clock::now();
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s: %s (Generates new variation)", meta.name.c_str(), meta.description.c_str());
     }
+    ImGui::SameLine();
+  }
 
-    // Display temporary export status message
-    if (!app.export_status.empty()) {
-      auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-          std::chrono::steady_clock::now() - app.export_status_time).count();
-      if (elapsed < 4) {
-        ImGui::SameLine();
-        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "%s", app.export_status.c_str());
-      } else {
-        app.export_status.clear();
-      }
-    }
+  if (ImGui::Button("New Seed")) {
+    std::random_device rd;
+    app.seed = rd();
+    resynthesize(app);
+    play_audio(app);
+  }
 
-    ImGui::NewLine();
-    ImGui::Separator();
+  ImGui::SameLine();
+  ImGui::Spacing();
+  ImGui::SameLine();
 
-    // Waveform Preview Plot
-    ImGui::Text("Waveform Preview (Duration: %.2f s, Samples: %zu)",
-                app.audio_buffer.size() / 44100.0f, app.audio_buffer.size());
-    if (!app.waveform_display.empty()) {
-      ImGui::PlotLines("##Waveform", app.waveform_display.data(),
-                       static_cast<int>(app.waveform_display.size()), 0,
-                       nullptr, -1.0f, 1.0f, ImVec2(-1.0f, 130.0f));
+  ImGui::SetNextItemWidth(140.0f);
+  ImGui::InputText("##ExportFile", app.export_filename, sizeof(app.export_filename));
+  ImGui::SameLine();
+  if (ImGui::Button("Export WAV")) {
+    if (app.audio_buffer.empty()) {
+      app.export_status = "Error: empty buffer!";
     } else {
-      ImGui::TextDisabled("No waveform generated.");
-    }
-
-    ImGui::Separator();
-
-    // Parameters in 2-column child area
-    ImGui::BeginChild("ParamsRegion", ImVec2(0, 0), true);
-
-    // WaveType selection
-    int current_wave = static_cast<int>(app.params["waveType"]);
-    const char* wave_names[] = {
-        "Square (0)", "Saw (1)", "Sin (2)", "White Noise (3)", "Triangle (4)",
-        "Rasp (5)", "Tan (6)", "Whistle (7)", "Breaker (8)", "Bitnoise (9)",
-        "FMSyn (10)", "Voice (11)"
-    };
-    int wave_indices[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
-    int combo_idx = 0;
-    for (int i = 0; i < 12; ++i) {
-      if (wave_indices[i] == current_wave) {
-        combo_idx = i;
-        break;
+      std::string wav_data = bfxr::encode_wav16(
+          app.audio_buffer.data(),
+          app.audio_buffer.size(),
+          44100
+      );
+      if (bfxr::write_file(app.export_filename, wav_data)) {
+        app.export_status = std::string("Saved ") + app.export_filename;
+      } else {
+        app.export_status = "Error writing file!";
       }
     }
+    app.export_status_time = std::chrono::steady_clock::now();
+  }
 
-    ImGui::Text("Waveform Type:");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(250.0f);
-    if (ImGui::Combo("##WaveType", &combo_idx, wave_names, 12)) {
-      app.params["waveType"] = wave_indices[combo_idx];
+  if (!app.export_status.empty()) {
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::steady_clock::now() - app.export_status_time).count();
+    if (elapsed < 4) {
+      ImGui::SameLine();
+      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "%s", app.export_status.c_str());
+    } else {
+      app.export_status.clear();
+    }
+  }
+
+  ImGui::NewLine();
+  ImGui::Separator();
+
+  ImGui::Text("Waveform Preview (Duration: %.2f s, Samples: %zu)",
+              app.audio_buffer.size() / 44100.0f, app.audio_buffer.size());
+  if (!app.waveform_display.empty()) {
+    ImGui::PlotLines("##Waveform", app.waveform_display.data(),
+                     static_cast<int>(app.waveform_display.size()), 0,
+                     nullptr, -1.0f, 1.0f, ImVec2(-1.0f, 130.0f));
+  } else {
+    ImGui::TextDisabled("No waveform generated.");
+  }
+
+  ImGui::Separator();
+
+  ImGui::BeginChild("ParamsRegion", ImVec2(0, 0), true);
+
+  int current_wave = static_cast<int>(app.params["waveType"]);
+  const char* wave_names[] = {
+      "Square (0)", "Saw (1)", "Sin (2)", "White Noise (3)", "Triangle (4)",
+      "Rasp (5)", "Tan (6)", "Whistle (7)", "Breaker (8)", "Bitnoise (9)",
+      "FMSyn (10)", "Voice (11)"
+  };
+  int wave_indices[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+  int combo_idx = 0;
+  for (int i = 0; i < 12; ++i) {
+    if (wave_indices[i] == current_wave) {
+      combo_idx = i;
+      break;
+    }
+  }
+
+  ImGui::Text("Waveform Type:");
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(250.0f);
+  if (ImGui::Combo("##WaveType", &combo_idx, wave_names, 12)) {
+    app.params["waveType"] = wave_indices[combo_idx];
+    app.dirty = true;
+  }
+
+  ImGui::Columns(2, "ParamColumns", true);
+
+  size_t count = 0;
+  for (const auto& meta : app.param_info.params) {
+    if (meta.name == "waveType") continue;
+
+    float val = static_cast<float>(app.params[meta.name]);
+    float min_v = static_cast<float>(meta.min_value);
+    float max_v = static_cast<float>(meta.max_value);
+
+    ImGui::PushID(meta.name.c_str());
+    ImGui::Text("%s", meta.name.c_str());
+    ImGui::SameLine(180.0f);
+    ImGui::SetNextItemWidth(-1.0f);
+    if (ImGui::SliderFloat("##val", &val, min_v, max_v, "%.3f")) {
+      app.params[meta.name] = static_cast<double>(val);
       app.dirty = true;
     }
+    ImGui::PopID();
 
-    ImGui::Columns(2, "ParamColumns", true);
-
-    size_t count = 0;
-    for (const auto& meta : app.param_info.params) {
-      if (meta.name == "waveType") continue;
-
-      float val = static_cast<float>(app.params[meta.name]);
-      float min_v = static_cast<float>(meta.min_value);
-      float max_v = static_cast<float>(meta.max_value);
-
-      ImGui::PushID(meta.name.c_str());
-      ImGui::Text("%s", meta.name.c_str());
-      ImGui::SameLine(180.0f);
-      ImGui::SetNextItemWidth(-1.0f);
-      if (ImGui::SliderFloat("##val", &val, min_v, max_v, "%.3f")) {
-        app.params[meta.name] = static_cast<double>(val);
-        app.dirty = true;
-      }
-      ImGui::PopID();
-
-      count++;
-      if (count == (app.param_info.params.size() / 2)) {
-        ImGui::NextColumn();
-      }
+    count++;
+    if (count == (app.param_info.params.size() / 2)) {
+      ImGui::NextColumn();
     }
-
-    ImGui::Columns(1);
-    ImGui::EndChild();
-
-    ImGui::End();
-
-    // If any slider modified parameters, re-synthesize
-    if (app.dirty) {
-      resynthesize(app);
-    }
-
-    // Render ImGui
-    ImGui::Render();
-    SDL_SetRenderScale(renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
-    if (is_dark_theme) {
-      SDL_SetRenderDrawColor(renderer, 25, 25, 28, 255);
-    } else {
-      SDL_SetRenderDrawColor(renderer, 240, 240, 245, 255);
-    }
-    SDL_RenderClear(renderer);
-    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
-    SDL_RenderPresent(renderer);
   }
 
-  // Cleanup
-  ImGui_ImplSDLRenderer3_Shutdown();
-  ImGui_ImplSDL3_Shutdown();
-  ImGui::DestroyContext();
+  ImGui::Columns(1);
+  ImGui::EndChild();
+  ImGui::End();
 
-  if (stream) {
-    SDL_DestroyAudioStream(stream);
+  if (app.dirty) {
+    resynthesize(app);
   }
-  SDL_DestroyRenderer(renderer);
-  SDL_DestroyWindow(window);
-  SDL_Quit();
 
-  return 0;
+  ImGui::Render();
+  ImGuiIO& io = ImGui::GetIO();
+  SDL_SetRenderScale(renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
+  if (data->is_dark_theme) {
+    SDL_SetRenderDrawColor(renderer, 25, 25, 28, 255);
+  } else {
+    SDL_SetRenderDrawColor(renderer, 240, 240, 245, 255);
+  }
+  SDL_RenderClear(renderer);
+  ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
+  SDL_RenderPresent(renderer);
+
+  return SDL_APP_CONTINUE;
+}
+
+void SDL_AppQuit(void* appstate, SDL_AppResult result) {
+  if (appstate) {
+    auto* data = static_cast<FullAppData*>(appstate);
+
+    ImGui_ImplSDLRenderer3_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
+
+    if (data->app.audio_stream) {
+      SDL_DestroyAudioStream(data->app.audio_stream);
+    }
+    if (data->renderer) {
+      SDL_DestroyRenderer(data->renderer);
+    }
+    if (data->window) {
+      SDL_DestroyWindow(data->window);
+    }
+    delete data;
+  }
 }

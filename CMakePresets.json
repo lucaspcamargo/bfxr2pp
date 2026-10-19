@@ -1,0 +1,30 @@
+{
+    "version": 3,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 21,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "Emscripten",
+            "hidden": false,
+            "description": "Configure for Emscripten",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/emscripten",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
+                "BFXR2_BUILD_EXAMPLES": "ON",
+                "BFXR2_BUILD_TOOLS": "OFF"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "Emscripten",
+            "configurePreset": "Emscripten"
+        }
+    ]
+}
