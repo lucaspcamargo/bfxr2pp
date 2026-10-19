@@ -1,0 +1,22 @@
+name: Emscripten demo build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    # Uses GitHub's default Linux-hosted runner environment
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Check out your repository code onto the runner
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Emscripten toolchain
+        uses: emscripten-core/setup-emsdk@v16
+      - name: Main Build
+        run: |
+          emcmake -B ./build -S .
