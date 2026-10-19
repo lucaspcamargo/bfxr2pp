@@ -13,6 +13,7 @@ option(BFXR2_BUILD_EXAMPLES "Build example applications" OFF)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
+include(FetchContent)
 
 if(EMSCRIPTEN)
   # for the web, build executables as html
@@ -85,6 +86,15 @@ if(BFXR2_BUILD_EXAMPLES)
     else()
       set(BFXR2_SDL3_TARGET SDL3::SDL3)
     endif()
+  else()
+    # when building apps for Emscripten, build SDL3 from source too
+    FetchContent_Declare(
+      SDL3
+      GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+      GIT_TAG release-3.4.x
+    )
+    FetchContent_MakeAvailable(SDL3)
+      set(BFXR2_SDL3_TARGET SDL3::SDL3)
   endif()
 
   add_executable(bfxr2pp_sdl_play examples/sdl_playback/main.cpp)
@@ -120,6 +130,7 @@ if(BFXR2_BUILD_EXAMPLES)
   target_link_libraries(bfxr2pp_gui PRIVATE bfxr2 imgui_sdl3 ${BFXR2_SDL3_TARGET})
 
   if(EMSCRIPTEN)
+    target_compile_options(bfxr2pp_gui PRIVATE "-sUSE_SDL=3")
     set_target_properties(bfxr2pp_gui PROPERTIES LINK_FLAGS "-s USE_SDL=3 --shell-file ${CMAKE_SOURCE_DIR}/ems/shell.html")
   endif()
 endif()
