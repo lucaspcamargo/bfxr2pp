@@ -15,7 +15,7 @@
 namespace {
 
 void print_usage() {
-  std::cout << "Usage: bfxr_sdl_play [preset_name] [--seed N]\n\n"
+  std::cout << "Usage: bfxr2pp_sdl_play [preset_name] [--seed N]\n\n"
             << "Available presets:\n";
   for (const auto& meta : bfxr::get_preset_list()) {
     std::cout << "  " << meta.short_name << " (" << meta.name << "): " << meta.description << "\n";

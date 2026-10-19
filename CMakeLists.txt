@@ -79,8 +79,8 @@ if(BFXR2_BUILD_EXAMPLES)
     set(BFXR2_SDL3_TARGET SDL3::SDL3)
   endif()
 
-  add_executable(bfxr_sdl_play examples/sdl_playback/main.cpp)
-  target_link_libraries(bfxr_sdl_play PRIVATE bfxr2 ${BFXR2_SDL3_TARGET})
+  add_executable(bfxr2pp_sdl_play examples/sdl_playback/main.cpp)
+  target_link_libraries(bfxr2pp_sdl_play PRIVATE bfxr2 ${BFXR2_SDL3_TARGET})
 
   # Fetch Dear ImGui
   include(FetchContent)
@@ -105,8 +105,8 @@ if(BFXR2_BUILD_EXAMPLES)
   )
   target_link_libraries(imgui_sdl3 PUBLIC ${BFXR2_SDL3_TARGET})
 
-  add_executable(bfxr_gui examples/gui/main.cpp)
-  target_link_libraries(bfxr_gui PRIVATE bfxr2 imgui_sdl3 ${BFXR2_SDL3_TARGET})
+  add_executable(bfxr2pp_gui examples/gui/main.cpp)
+  target_link_libraries(bfxr2pp_gui PRIVATE bfxr2 imgui_sdl3 ${BFXR2_SDL3_TARGET})
 endif()
 
 # Installation & CMake Export

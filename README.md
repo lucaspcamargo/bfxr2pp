@@ -33,7 +33,7 @@ cmake --build build
 | `BUILD_SHARED_LIBS` | `OFF` | Build shared library instead of static |
 | `BFXR2_ENABLE_JSON` | `ON` | Include built-in JSON parameter parser (`JsonParamReader`) |
 | `BFXR2_BUILD_TOOLS` | `ON` | Build CLI rendering tool (`bfxr_render`) |
-| `BFXR2_BUILD_EXAMPLES` | `OFF` | Build examples (e.g. `bfxr_sdl_play` with SDL3) |
+| `BFXR2_BUILD_EXAMPLES` | `OFF` | Build examples (`bfxr2pp_sdl_play`, `bfxr2pp_gui`) |
 
 ### Installing
 
@@ -137,9 +137,9 @@ The repository includes `bfxr_render`, a command-line tool to render sound files
 
 ## Examples
 
-### SDL3 Audio Playback (`bfxr_sdl_play`)
+### SDL3 Audio Playback (`bfxr2pp_sdl_play`)
 
-When built with `-DBFXR2_BUILD_EXAMPLES=ON`, the project builds `bfxr_sdl_play` under `examples/sdl_playback/`, which generates sound effects procedurally and plays them through SDL3:
+When built with `-DBFXR2_BUILD_EXAMPLES=ON`, the project builds `bfxr2pp_sdl_play` under `examples/sdl_playback/`, which generates sound effects procedurally and plays them through SDL3:
 
 ```bash
 # Build with examples enabled
@@ -147,22 +147,22 @@ cmake -B build -DBFXR2_BUILD_EXAMPLES=ON
 cmake --build build
 
 # Play a preset with a random or specific seed
-./build/bfxr_sdl_play shoot
-./build/bfxr_sdl_play coin --seed 42
-./build/bfxr_sdl_play explosion
+./build/bfxr2pp_sdl_play shoot
+./build/bfxr2pp_sdl_play coin --seed 42
+./build/bfxr2pp_sdl_play explosion
 
 # Show help and all available presets
-./build/bfxr_sdl_play --help
+./build/bfxr2pp_sdl_play --help
 ```
 
-### Interactive GUI Studio (`bfxr_gui`)
+### Interactive GUI Studio (`bfxr2pp_gui`)
 
-When built with `-DBFXR2_BUILD_EXAMPLES=ON`, the project builds `bfxr_gui` under `examples/gui/`, using Dear ImGui (via CMake FetchContent) and the SDL 2D renderer:
+When built with `-DBFXR2_BUILD_EXAMPLES=ON`, the project builds `bfxr2pp_gui` under `examples/gui/`, using Dear ImGui (via CMake FetchContent) and the SDL 2D renderer:
 
 ![bfxr2pp Studio GUI](doc/gui.png)
 
 ```bash
-./build/bfxr_gui
+./build/bfxr2pp_gui
 ```
 
 Features:
