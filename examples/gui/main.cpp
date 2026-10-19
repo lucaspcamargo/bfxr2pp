@@ -11,6 +11,10 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -387,11 +391,36 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
           app.audio_buffer.size(),
           44100
       );
+#if defined(__EMSCRIPTEN__)
+      // Trigger a browser file download via Emscripten JS macro
+      EM_ASM({
+          const ptr = $0;
+          const length = $1;
+          const filename = UTF8ToString($2);
+
+          // Copy raw bytes from the WebAssembly heap into a JS Uint8Array
+          const data = new Uint8Array(HEAPU8.buffer, ptr, length);
+          const blob = new Blob([data], { type: 'audio/wav' });
+          const url = URL.createObjectURL(blob);
+
+          // Create a temporary anchor element and click it to trigger download
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+      }, wav_data.data(), wav_data.size(), app.export_filename);
+
+      app.export_status = std::string("Downloaded ") + app.export_filename;
+#else
       if (bfxr::write_file(app.export_filename, wav_data)) {
         app.export_status = std::string("Saved ") + app.export_filename;
       } else {
         app.export_status = "Error writing file!";
       }
+#endif
     }
     app.export_status_time = std::chrono::steady_clock::now();
   }
